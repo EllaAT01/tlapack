@@ -22,10 +22,25 @@ namespace tlapack {
 /// @brief Options struct for pbtrf_with_workspace()
 struct BlockedAndBandedCholeskyOpts : public EcOpts {
     constexpr BlockedAndBandedCholeskyOpts(const EcOpts& opts = {})
-        : EcOpts(opts){};
+        : EcOpts(opts) {};
 
     size_t nb = 32;  // Block size
 };
+
+template <typename matrix_t>
+void printMatrix(const matrix_t& A)
+{
+    using idx_t = tlapack::size_type<matrix_t>;
+    const idx_t m = tlapack::nrows(A);
+    const idx_t n = tlapack::ncols(A);
+
+    for (idx_t i = 0; i < m; ++i) {
+        std::cout << std::endl;
+        for (idx_t j = 0; j < n; ++j)
+            std::cout << A(i, j) << " ";
+    }
+    std::cout << std::endl;
+}
 /**
  *
  * Cholesky factorization of a full, banded, n by n matrix.
@@ -51,9 +66,9 @@ struct BlockedAndBandedCholeskyOpts : public EcOpts {
 
 template <typename uplo_t, typename matrix_t>
 void pbtrf(uplo_t uplo,
-                          matrix_t& A,
-                          size_t kd,
-                          const BlockedAndBandedCholeskyOpts& opts = {})
+           matrix_t& A,
+           size_t kd,
+           const BlockedAndBandedCholeskyOpts& opts = {})
 {
     using T = tlapack::type_t<matrix_t>;
     using idx_t = tlapack::size_type<matrix_t>;
@@ -109,15 +124,28 @@ void pbtrf(uplo_t uplo,
                     auto A02 =
                         slice(A, range(i, i + ib), range(i + kd, i + kd + i3));
 
+                    auto A02_0 = slice(A02, range(0, i3), range(0, i3));
+                    auto A02_1 = slice(A02, range(i3, ib), range(0, i3));
+
                     auto work02 = slice(work, range(0, ib), range(0, i3));
 
                     for (idx_t jj = 0; jj < i3; jj++)
                         for (idx_t ii = jj; ii < ib; ++ii)
                             work02(ii, jj) = A02(ii, jj);
 
+                    std::cout << "work = " << std::endl;
+                    printMatrix(work02);
+
+                    std::cout << "A02 = " << std::endl;
+                    printMatrix(A02);
+
                     trsm(tlapack::Side::Left, tlapack::Uplo::Upper,
                          tlapack::Op::ConjTrans, tlapack::Diag::NonUnit,
                          real_t(1), A00, work02);
+
+                    auto work02_0 = slice(work02, range(0, i3), range(0, i3));
+
+                    auto work02_1 = slice(work02, range(i3, ib), range(0, i3));
 
                     auto A12 = slice(A, range(i + ib, i + kd),
                                      range(i + kd, std::min(i + kd + i3, n)));
@@ -125,10 +153,33 @@ void pbtrf(uplo_t uplo,
                     auto A01 = slice(A, range(i, ib + i),
                                      range(i + ib, std::min(i + ib + i2, n)));
 
-                    // gemm(tlapack::Op::ConjTrans, tlapack::Op::NoTrans,
-                    //      real_t(-1), A01, work02, real_t(1), A12);
+                    auto A01_0 = slice(A01, range(0, i3), range(0, i2));
 
-                    trmm_out(Side::Right, uplo, Op::NoTrans, Diag::NonUnit, Op::ConjTrans, real_t(-1), A02, A01, real_t(1), A12);
+                    auto A01_1 = slice(A01, range(i3, ib), range(0, i2));
+
+                    std::vector<T> temp_;
+                    auto temp = new_matrix(temp_, i2, i3);
+
+                    // lacpy(Uplo::General, A12, temp);
+
+                    gemm(tlapack::Op::ConjTrans, tlapack::Op::NoTrans,
+                         real_t(-1), A01_0, work02_0, real_t(1), A12);
+
+                    gemm(tlapack::Op::ConjTrans, tlapack::Op::NoTrans,
+                         real_t(-1), A01_1, A02_1, real_t(1), A12);
+
+                    // std::cout << "temp = " << std::endl;
+                    // printMatrix(temp);
+
+                    // trmm_out(Side::Right, Uplo::Lower, Op::NoTrans,
+                    //          Diag::NonUnit, Op::ConjTrans, real_t(-1), A02_0,
+                    //          A01_0, real_t(1), A12);
+
+                    // gemm(Op::ConjTrans, Op::NoTrans, real_t(-1), A01_1, A02_1,
+                    //      real_t(1), A12);
+
+                    // std::cout << "A12 = " << std::endl;
+                    // printMatrix(A12);
 
                     auto A22 = slice(A, range(i + kd, std::min(i + kd + i3, n)),
                                      range(i + kd, std::min(i + kd + i3, n)));
