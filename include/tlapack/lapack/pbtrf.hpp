@@ -1,4 +1,4 @@
-/// @file pbtrf_with_workspace.hpp
+/// @file pbtrf.hpp
 /// @author Ella Addison-Taylor, Kyle Cunningham, University of Colorado Denver,
 /// USA
 //
@@ -8,19 +8,20 @@
 // <T>LAPACK is free software: you can redistribute it and/or modify it under
 // the terms of the BSD 3-Clause license. See the accompanying LICENSE file.
 
-#ifndef TLAPACK_PBTRF_WITH_WORKSPACE_HH
-#define TLAPACK_PBTRF_WITH_WORKSPACE_HH
+#ifndef TLAPACK_PBTRF_HH
+#define TLAPACK_PBTRF_HH
 
 #include "tlapack/blas/trsm.hpp"
 #include "tlapack/lapack/mult_llh.hpp"
 #include "tlapack/lapack/mult_uhu.hpp"
 #include "tlapack/lapack/potrf.hpp"
+#include "tlapack/lapack/trmm_out.hpp"
 
 namespace tlapack {
 
 /// @brief Options struct for pbtrf_with_workspace()
-struct BlockedBandedCholeskyOpts : public EcOpts {
-    constexpr BlockedBandedCholeskyOpts(const EcOpts& opts = {})
+struct BlockedAndBandedCholeskyOpts : public EcOpts {
+    constexpr BlockedAndBandedCholeskyOpts(const EcOpts& opts = {})
         : EcOpts(opts){};
 
     size_t nb = 32;  // Block size
@@ -49,10 +50,10 @@ struct BlockedBandedCholeskyOpts : public EcOpts {
  **/
 
 template <typename uplo_t, typename matrix_t>
-void pbtrf_with_workspace(uplo_t uplo,
+void pbtrf(uplo_t uplo,
                           matrix_t& A,
                           size_t kd,
-                          const BlockedBandedCholeskyOpts& opts = {})
+                          const BlockedAndBandedCholeskyOpts& opts = {})
 {
     using T = tlapack::type_t<matrix_t>;
     using idx_t = tlapack::size_type<matrix_t>;
@@ -124,8 +125,10 @@ void pbtrf_with_workspace(uplo_t uplo,
                     auto A01 = slice(A, range(i, ib + i),
                                      range(i + ib, std::min(i + ib + i2, n)));
 
-                    gemm(tlapack::Op::ConjTrans, tlapack::Op::NoTrans,
-                         real_t(-1), A01, work02, real_t(1), A12);
+                    // gemm(tlapack::Op::ConjTrans, tlapack::Op::NoTrans,
+                    //      real_t(-1), A01, work02, real_t(1), A12);
+
+                    trmm_out(Side::Right, uplo, Op::NoTrans, Diag::NonUnit, Op::ConjTrans, real_t(-1), A02, A01, real_t(1), A12);
 
                     auto A22 = slice(A, range(i + kd, std::min(i + kd + i3, n)),
                                      range(i + kd, std::min(i + kd + i3, n)));
@@ -218,4 +221,4 @@ void pbtrf_with_workspace(uplo_t uplo,
 
 }  // namespace tlapack
 
-#endif  // TLAPACK_PBTRF_WITH_WORKSPACE_HH
+#endif  // TLAPACK_PBTRF_HH

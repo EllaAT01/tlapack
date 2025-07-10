@@ -18,9 +18,10 @@
 // Other routines
 #include <iomanip>
 #include <tlapack/lapack/lacpy.hpp>
-#include <tlapack/lapack/pbtrf_with_workspace.hpp>
+#include <tlapack/lapack/pbtrf.hpp>
 
 using namespace tlapack;
+
 
 TEMPLATE_TEST_CASE("triagular matrix-matrix multiplication is backward stable",
                    "[triangular matrix-matrix check]",
@@ -68,12 +69,12 @@ TEMPLATE_TEST_CASE("triagular matrix-matrix multiplication is backward stable",
                 A(i, i) += real_t(n);
             }
 
-            BlockedBandedCholeskyOpts opts;
+            BlockedAndBandedCholeskyOpts opts;
             opts.nb = nb;
 
             lacpy(Uplo::General, A, A_orig);
 
-            pbtrf_with_workspace(uplo, A, kd, opts);
+            pbtrf(uplo, A, kd, opts);
 
             if (uplo == Uplo::Upper) {
                 real_t sum(0);
